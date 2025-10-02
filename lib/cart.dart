@@ -19,6 +19,7 @@ class Cart extends StatefulWidget {
 }
 
 class _CartState extends State<Cart> {
+  var _isLoading = true;
   List<GroceryItem> _groceryItems = [];
 
   @override
@@ -28,11 +29,17 @@ class _CartState extends State<Cart> {
   }
 
   void _addItem() async {
-    await Navigator.of(
+    final newItem = await Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (ctx) => NewItem()));
 
-    loadItems();
+    if (newItem == null) {
+      return;
+    }
+
+    setState(() {
+      _groceryItems.add(newItem);
+    });
   }
 
   void loadItems() async {
@@ -42,7 +49,7 @@ class _CartState extends State<Cart> {
     );
     final response = await http.get(url);
     final Map<String, dynamic> listData = json.decode(response.body);
-    final List<GroceryItem> _loadedItems = [];
+    final List<GroceryItem> loadedItems = [];
     for (final item in listData.entries) {
       final category = categories.entries
           .firstWhere(
@@ -50,7 +57,7 @@ class _CartState extends State<Cart> {
           )
           .value;
 
-      _loadedItems.add(
+      loadedItems.add(
         GroceryItem(
           id: item.key,
           name: item.value['name'],
@@ -60,7 +67,8 @@ class _CartState extends State<Cart> {
       );
 
       setState(() {
-        _groceryItems = _loadedItems;
+        _groceryItems = loadedItems;
+        _isLoading = false;
       });
     }
   }
@@ -73,10 +81,13 @@ class _CartState extends State<Cart> {
 
   @override
   Widget build(context) {
-    final content = Container(
-      alignment: Alignment.center,
+    var content = Center(
       child: Text('No items here.. Start adding new items!'),
     );
+
+    if (_isLoading) {
+      content = Center(child: CircularProgressIndicator());
+    }
 
     return Scaffold(
       appBar: AppBar(
