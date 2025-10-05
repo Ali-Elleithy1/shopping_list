@@ -1,9 +1,7 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shopping_list/data/categories.dart';
-import 'package:shopping_list/data/dummy_items.dart';
 import 'package:shopping_list/models/grocery_item.dart';
 import 'package:shopping_list/widgets/new_item.dart';
 
@@ -21,6 +19,7 @@ class Cart extends StatefulWidget {
 class _CartState extends State<Cart> {
   var _isLoading = true;
   List<GroceryItem> _groceryItems = [];
+  String? _error;
 
   @override
   void initState() {
@@ -43,40 +42,70 @@ class _CartState extends State<Cart> {
   }
 
   void loadItems() async {
-    final url = Uri.https(
-      'shopping-list-57633-default-rtdb.europe-west1.firebasedatabase.app',
-      'shopping-list.json',
-    );
-    final response = await http.get(url);
-    final Map<String, dynamic> listData = json.decode(response.body);
-    final List<GroceryItem> loadedItems = [];
-    for (final item in listData.entries) {
-      final category = categories.entries
-          .firstWhere(
-            (catItem) => catItem.value.title == item.value['category'],
-          )
-          .value;
-
-      loadedItems.add(
-        GroceryItem(
-          id: item.key,
-          name: item.value['name'],
-          quantity: item.value['quantity'],
-          category: category,
-        ),
+    try {
+      final url = Uri.https(
+        'shopping-list-57633-default-rtdb.europe-west1.firebasedatabase.app',
+        'shopping-list.json',
       );
+      final response = await http.get(url);
 
+      if (response.statusCode >= 400) {}
+
+      if (response.body == 'null') {
+        setState(() {
+          _isLoading = false;
+        });
+        return;
+      }
+
+      final Map<String, dynamic> listData = json.decode(response.body);
+      final List<GroceryItem> loadedItems = [];
+      for (final item in listData.entries) {
+        final category = categories.entries
+            .firstWhere(
+              (catItem) => catItem.value.title == item.value['category'],
+            )
+            .value;
+
+        loadedItems.add(
+          GroceryItem(
+            id: item.key,
+            name: item.value['name'],
+            quantity: item.value['quantity'],
+            category: category,
+          ),
+        );
+
+        setState(() {
+          _groceryItems = loadedItems;
+          _isLoading = false;
+        });
+      }
+    } catch (error) {
       setState(() {
-        _groceryItems = loadedItems;
-        _isLoading = false;
+        _error = 'Something went wrong! please try again later.';
       });
     }
   }
 
-  void _removeItem(GroceryItem item) {
+  void _removeItem(GroceryItem item) async {
+    final index = _groceryItems.indexOf(item);
+
+    final url = Uri.https(
+      'shopping-list-57633-default-rtdb.europe-west1.firebasedatabase.app',
+      'shopping-list/${item.id}.json',
+    );
+
+    final response = await http.delete(url);
     setState(() {
       _groceryItems.remove(item);
     });
+
+    if (response.statusCode >= 400) {
+      setState(() {
+        _groceryItems.insert(index, item);
+      });
+    }
   }
 
   @override
@@ -87,6 +116,10 @@ class _CartState extends State<Cart> {
 
     if (_isLoading) {
       content = Center(child: CircularProgressIndicator());
+    }
+
+    if (_error != null) {
+      content = Center(child: Text(_error!));
     }
 
     return Scaffold(
